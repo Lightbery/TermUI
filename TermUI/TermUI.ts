@@ -1,12 +1,47 @@
+import { opendir } from 'fs'
+import wcwidth from 'wcwidth'
+
 // TermUI
 class TermUI {
+  // Measure String
+  public static measureString (string: string): number {
+    let pureText: string = ''
+
+    for (let i = 0; i < string.length; i++) {
+      if (string[i] === '\x1b') {
+        const oldIndex = i
+
+        while (string[i] !== 'm' && i < string.length) i++
+
+        if (string[i] !== 'm') i = oldIndex + 1
+      } else pureText += string[i]
+    }
+
+    return wcwidth(string)
+  }
+
+  // Reduce A String
+  public static reduceString (string: string, width: number) {
+    const stringWidth = this.measureString(string)
+
+    if (stringWidth > width) {
+      let end = string.length - (width - stringWidth)
+
+      while (this.measureString(string.substring(0, end + 1)) < width) end++
+
+      return string.substring(0, end)
+    }
+
+    return string
+  }
+
   public width!: number
   public height!: number
 
   public layout: TermUIComponent[] = []
   public style: TermUIStyle = {
-    backgorundColor: Style.BackgroundColors.Default,
-    textColor: Style.TextColors.Default,
+    backgorundColor: Style.Reset.All,
+    textColor: Style.Reset.All,
 
     selected_BackgroundColor: Style.BackgroundColors.White,
     selected_TextColor: Style.TextColors.Black,
@@ -14,12 +49,17 @@ class TermUI {
     unselected_TextColor: Style.TextColors.White
   }
 
-  private _pages!: { [key: string]: { name: string, align: 'left' | 'right', render: () => string[] }}
+  private _pages: { [key: string]: TermUIPage } = {}
+  private _currentPage: undefined | string = undefined
+
+  private _oldLines: string[] = []
     
   constructor (width: number, height: number) {
     this.width = width
     this.height = height
   }
+
+  public get currentPage () {return this._currentPage}
 
   // Set The Size Of The Interface
   public setSize (width: undefined | number, height: undefined | number): TermUI {
@@ -42,6 +82,85 @@ class TermUI {
 
     return this
   }
+
+  // Add A Page
+  public addPage (id: string, page: TermUIPage): TermUI {
+    if (this._pages[id] !== undefined) throw new Error(`Page Already Exists: "${id}"`)
+
+    this._pages[id] = page
+
+    if (this._currentPage === undefined) this._currentPage = id
+
+    return this
+  }
+
+  // Remove A Page
+  public removePage (id: string): void {
+    if (this._pages[id] === undefined) throw new Error(`Page Not Found: "${id}"`)
+
+    delete this._pages[id]
+  }
+
+  // Get All The Pages
+  public getAllPages (): string[] {
+    return Object.keys(this._pages)
+  }
+
+  // Get The Info Of A Page
+  public getPageInfo (id: string): { name: string, align: 'left' | 'right' } {
+    if (this._pages[id] === undefined) throw new Error(`Page Not Found: "${id}"`)
+
+    const page = this._pages[id]
+
+    return {
+      name: page.name,
+      align: (page.align === undefined) ? 'left' : page.align 
+    }
+  }
+
+  // Render The Interface
+  public render (): string {
+    return this.renderRaw().map((change) => `\x1B[H${(change.line > 0) ? `\x1B[${change.line}B` : ''}\x1B[2K${change.content}`).join('')
+  }
+
+  // Render The Interface (Raw Changes)
+  public renderRaw (): { line: number, content: string }[] {
+    // Get the size of the components.
+
+    let leftSpace: number = 0
+    let fullComponents: number = 0
+
+    for (const component of this.layout) {
+      if (component.size === Infinity) fullComponents++
+      else leftSpace += component.size
+    }
+
+    // Render the components.
+
+    let lines: string[] = []
+
+    for (const component of this.layout) {
+      const size = (component.size === Infinity) ? Math.floor(leftSpace / fullComponents) : component.size
+
+      const componentLines = component.render(this, this.width, size)
+
+      if (componentLines.length !== size) throw new Error(`Component Render Output Size Does Not Match The Size: "${component.name}"`)
+
+      for (const line of componentLines) lines.push(TermUI.reduceString(line, this.width))
+    }
+    
+    // Get the changes.
+
+    const changes: { line: number, content: string }[] = []
+
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i] != this._oldLines[i]) changes.push({ line: i, content: lines[i] })
+    }
+
+    this._oldLines = lines
+
+    return changes
+  }
 }
 
 // TermUI Component
@@ -58,19 +177,19 @@ abstract class TermUIComponent {
   public get size () {return this._size}
 
   // Render The Component
-  public abstract render (width: number, height: number): string[]
+  public abstract render (Core: TermUI, width: number, height: number): string[]
 }
 
 
 // TermUI Style
 interface TermUIStyle {
-  backgorundColor: Style.BackgroundColors,
-  textColor: Style.TextColors,
+  backgorundColor: Style.BackgroundColors | Style.Reset,
+  textColor: Style.TextColors  | Style.Reset,
 
-  selected_BackgroundColor: Style.BackgroundColors,
-  selected_TextColor: Style.TextColors,
-  unselected_BackgroundColor: Style.BackgroundColors,
-  unselected_TextColor: Style.TextColors,
+  selected_BackgroundColor: Style.BackgroundColors | Style.Reset,
+  selected_TextColor: Style.TextColors | Style.Reset,
+  unselected_BackgroundColor: Style.BackgroundColors | Style.Reset,
+  unselected_TextColor: Style.TextColors | Style.Reset,
 }
 
 // TermUI Page
