@@ -1,0 +1,12 @@
+{
+  "compilerOptions": {
+    "moduleResolution": "node16",
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "module": "node16",
+    "strict": true,
+
+    "lib": ["ES2022"],
+    "types": ["@types/node"]
+  }
+}
