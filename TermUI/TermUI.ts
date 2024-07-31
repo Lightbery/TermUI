@@ -1,4 +1,3 @@
-import { opendir } from 'fs'
 import wcwidth from 'wcwidth'
 
 // TermUI
@@ -17,7 +16,7 @@ class TermUI {
       } else pureText += string[i]
     }
 
-    return wcwidth(string)
+    return wcwidth(pureText)
   }
 
   // Reduce A String
@@ -45,11 +44,11 @@ class TermUI {
 
     selected_BackgroundColor: Style.BackgroundColors.White,
     selected_TextColor: Style.TextColors.Black,
-    unselected_BackgroundColor: Style.BackgroundColors.Gray,
-    unselected_TextColor: Style.TextColors.White
+    notSelected_BackgroundColor: Style.BackgroundColors.Gray,
+    notSelected_TextColor: Style.TextColors.White
   }
 
-  private _pages: { [key: string]: TermUIPage } = {}
+  private _pages: { [key: string]: TermUIPageData } = {}
   private _currentPage: undefined | string = undefined
 
   private _oldLines: string[] = []
@@ -60,6 +59,33 @@ class TermUI {
   }
 
   public get currentPage () {return this._currentPage}
+
+    // Get All The Pages
+  public getAllPages (): string[] {
+    return Object.keys(this._pages)
+  }
+
+  // Get The Info Of A Page
+  public getPageInfo (id: string): { name: string, align: 'left' | 'right', cursor: number, scroll: number } {
+    if (this._pages[id] === undefined) throw new Error(`Page Not Found: "${id}"`)
+
+    const page = this._pages[id]
+
+    return {
+      name: page.name,
+      align: page.align,
+
+      cursor: page.cursor,
+      scroll: page.scroll
+    }
+  }
+
+  // Get Content Of The Current Page 
+  public getPageContent (): string[] {
+    if (this.currentPage === undefined) throw new Error('No Current Page')
+
+    return this._pages[this._currentPage!].content
+  }
 
   // Set The Size Of The Interface
   public setSize (width: undefined | number, height: undefined | number): TermUI {
@@ -74,7 +100,7 @@ class TermUI {
     this.layout = layout
 
     return this
-  } 
+  }
 
   // Set The Style Of The Interface
   public setStyle (style: TermUIStyle): TermUI {
@@ -87,7 +113,16 @@ class TermUI {
   public addPage (id: string, page: TermUIPage): TermUI {
     if (this._pages[id] !== undefined) throw new Error(`Page Already Exists: "${id}"`)
 
-    this._pages[id] = page
+    this._pages[id] = {
+      name: page.name,
+      align: (page.align === undefined) ? 'left' : page.align,
+
+      render: page.render,
+      content: page.render(),
+
+      cursor: 0,
+      scroll: 0
+    }
 
     if (this._currentPage === undefined) this._currentPage = id
 
@@ -99,27 +134,29 @@ class TermUI {
     if (this._pages[id] === undefined) throw new Error(`Page Not Found: "${id}"`)
 
     delete this._pages[id]
+
+    if (this._currentPage === id) {
+      const pages = Object.keys(this._pages)
+
+      this._currentPage = (pages.length > 0) ? pages[0] : undefined
+    }
   }
 
-  // Get All The Pages
-  public getAllPages (): string[] {
-    return Object.keys(this._pages)
-  }
-
-  // Get The Info Of A Page
-  public getPageInfo (id: string): { name: string, align: 'left' | 'right' } {
+  // Switch A Page
+  public switchPage (id: string): void {
     if (this._pages[id] === undefined) throw new Error(`Page Not Found: "${id}"`)
 
-    const page = this._pages[id]
-
-    return {
-      name: page.name,
-      align: (page.align === undefined) ? 'left' : page.align 
-    }
+    this._currentPage = id
   }
 
   // Render The Interface
   public render (): string {
+    if (this._currentPage !== undefined) {
+      const page = this._pages[this._currentPage]
+
+      page.content = page.render() 
+    }
+
     return this.renderRaw().map((change) => `\x1B[H${(change.line > 0) ? `\x1B[${change.line}B` : ''}\x1B[2K${change.content}`).join('')
   }
 
@@ -127,12 +164,12 @@ class TermUI {
   public renderRaw (): { line: number, content: string }[] {
     // Get the size of the components.
 
-    let leftSpace: number = 0
+    let leftSpace: number = this.height
     let fullComponents: number = 0
 
     for (const component of this.layout) {
       if (component.size === Infinity) fullComponents++
-      else leftSpace += component.size
+      else leftSpace -= component.size
     }
 
     // Render the components.
@@ -188,8 +225,8 @@ interface TermUIStyle {
 
   selected_BackgroundColor: Style.BackgroundColors | Style.Reset,
   selected_TextColor: Style.TextColors | Style.Reset,
-  unselected_BackgroundColor: Style.BackgroundColors | Style.Reset,
-  unselected_TextColor: Style.TextColors | Style.Reset,
+  notSelected_BackgroundColor: Style.BackgroundColors | Style.Reset,
+  notSelected_TextColor: Style.TextColors | Style.Reset,
 }
 
 // TermUI Page
@@ -198,6 +235,18 @@ interface TermUIPage {
   align?: 'left' | 'right',
 
   render: () => string[]
+}
+
+// TermUIPageData
+interface TermUIPageData {
+  name: string,
+  align: 'left' | 'right',
+
+  render: () => string[],
+  content: string[],
+
+  cursor: 0,
+  scroll: 0
 }
 
 // Style
