@@ -1,43 +1,23 @@
-import Components from '../../TermUI/Components'
-import { TermUI } from '../../TermUI/TermUI'
+import { TermUI, Page, Components } from '../../TermUI/API'
 
-const UI = new TermUI(process.stdout.columns, process.stdout.rows - 1)
-  .setLayout([
-    new Components.PageTabs(),
-    new Components.Blank(),
-    new Components.PageContent(),
-    new Components.Blank()
-  ])
-  .addPage('log', {
-    name: 'log',
+const UI = new TermUI(process.stdout.columns, process.stdout.rows)
+  .addPage('log', new class extends Page {
+    constructor () {
+      super('Log')
 
-    render: () => ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15']
-  })
-  .addPage('log2', {
-    name: 'log',
-    align: 'right',
-
-    render: () => ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15']
-  })
-  .addPage('log3', {
-    name: 'log',
-    align: 'left',
-
-    render: () => ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15']
-  })
-  .addPage('log4', {
-    name: 'log',
-    align: 'left',
-
-    render: () => ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15']
-  })
-  .addPage('log5', {
-    name: 'log',
-    align: 'left',
-
-    render: () => ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15']
+      this.components = [
+        new Components.PageTabs(),
+        new Components.Blank(),
+        new Components.PageContent(() => ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12']),
+        new Components.Blank()
+      ]
+    } 
   })
 
-process.stdout.write('\n'.repeat(process.stdout.rows))
+UI.start()
 
-process.stdout.write(UI.render())
+// UI.render()
+
+//process.stdout.write('\n'.repeat(process.stdout.rows))
+//
+//process.stdout.write(UI.render())
